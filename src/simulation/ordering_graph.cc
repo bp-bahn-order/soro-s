@@ -172,6 +172,13 @@ ordering_graph::ordering_graph() = default;
  */
 ordering_graph generate_testgraph(const int train_amnt, const int track_amnt,
                                   const int min_nodes, const int max_nodes) {
+  std::random_device rd;
+  return generate_testgraph(train_amnt, track_amnt, min_nodes, max_nodes, rd());
+}
+
+ordering_graph generate_testgraph(const int train_amnt, const int track_amnt,
+                                  const int min_nodes, const int max_nodes,
+                                  const unsigned int seed) {
   ordering_graph graph;
 
   // are min and max valid?
@@ -179,8 +186,7 @@ ordering_graph generate_testgraph(const int train_amnt, const int track_amnt,
   const int max = max_nodes <= track_amnt ? max_nodes : track_amnt;
 
   // get random number generator
-  std::random_device rd;
-  std::mt19937 mt(rd());
+  std::mt19937 mt(seed);
   std::uniform_int_distribution<> distr_node(min, max);
   std::uniform_int_distribution<> distr_track(0, track_amnt - 1);
 
@@ -188,10 +194,10 @@ ordering_graph generate_testgraph(const int train_amnt, const int track_amnt,
   for (auto train = 0; train < train_amnt; train++) {
     // amount of tracks this train will use for now
     const auto node_amnt = distr_node(mt);
+    std::vector<int> chosen_ids;
 
     for (auto n = 0; n < node_amnt; n++) {
       // choose a random new track that this train will use
-      std::vector<int> chosen_ids;
       int track_id = 0;
       while (true) {
         track_id = distr_track(mt);
