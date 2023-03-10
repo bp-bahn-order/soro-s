@@ -27,21 +27,14 @@ struct route_usage {
 
 template <typename Writer>
 void ordering_node::serialize(Writer& writer) {
-  writer.StartObject();
-  writer.Key("k");
+  writer.StartArray();
   writer.String(std::to_string(id_).c_str());
 
-  writer.Key("a");
-  writer.StartObject();
-
-  writer.Key("r");
   writer.Uint(ir_id_);
 
-  writer.Key("t");
   writer.Uint(train_id_);
 
-  writer.EndObject();
-  writer.EndObject();
+  writer.EndArray();
 }
 
 using usage_idx = uint32_t;
@@ -392,30 +385,28 @@ template <typename Writer>
 void ordering_graph::serialize(Writer& writer) {
   writer.StartObject();
 
-  writer.Key("attributes");
+  writer.Key("a");
   writer.StartObject();
   writer.EndObject();
 
-  writer.Key("nodes");
+  writer.Key("n");
   writer.StartArray();
   for (ordering_node node : nodes_) {
     node.serialize(writer);
   }
   writer.EndArray();
 
-  writer.Key("edges");
+  writer.Key("e");
   writer.StartArray();
   for (const ordering_node& node : nodes_) {
     for (const uint32_t to_id : node.out_) {
-      writer.StartObject();
+      writer.StartArray();
 
-      writer.Key("s");
       writer.String(std::to_string(node.id_).c_str());
 
-      writer.Key("t");
       writer.String(std::to_string(to_id).c_str());
 
-      writer.EndObject();
+      writer.EndArray();
     }
   }
   writer.EndArray();
