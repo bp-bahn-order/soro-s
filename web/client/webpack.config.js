@@ -7,11 +7,6 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.(glsl|vs|fs)$/,
-        use: 'ts-shader-loader',
-        exclude: /node_modules/,
-      },
-      {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/,
@@ -23,7 +18,7 @@ module.exports = {
   },
   output: {
     filename: 'bundle.js',
-    path: path.resolve(__dirname, '/..', 'Users', 'toebn', 'source', 'repos', 'soro-s', 'build', 'msvc-release', 'server_resources', 'components', 'ordering_graph'),
+    path: path.resolve(__dirname, 'components', 'ordering_graph'),
     library: {
       name: 'webpackSigmaGraph',
       type: 'umd',

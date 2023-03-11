@@ -4,23 +4,26 @@ import Sigma from "sigma";
 import { sendRequest, sendPostData } from "../api/api_graph";
 import { rendererSettings, edgeSettings, nodeColor, edgeColor, edgeOnHoverColor } from "./settings";
 import { subgraph } from "graphology-operators";
-import _ from "lodash";
 
 
 export class SigmaGraphCreator {
+    //HtmlElements
     rootElement: HTMLElement;
     sigmaContainer: HTMLElement;
     search: HTMLElement;
     searchInput: HTMLInputElement;
+    neighborInput: HTMLInputElement;
     searchSuggestions: HTMLDataListElement;
-    renderer: Sigma<DirectedGraph>;
+    
+    //helpers for filtering
     maxTrainLength: number;
     nodesForGivenTrainId: Map<number, Array<string>>;
     nodesForGivenRouteId: Map<number, Array<string>>;
 
+    //graph and interactions
     addEventListener: any;
     graph: DirectedGraph;
-    neighborInput: HTMLInputElement;
+    renderer: Sigma<DirectedGraph>;
 
     constructor(rootElement: HTMLElement) {
         this.rootElement = rootElement;
@@ -33,7 +36,7 @@ export class SigmaGraphCreator {
         this.nodesForGivenRouteId = new Map<number, Array<string>>();
         this.graph = new DirectedGraph();
         this.getInitGraph(this.graph);
-        
+
 
         this.searchInput.addEventListener('input', (e) => {
             this.processInput();
@@ -44,6 +47,9 @@ export class SigmaGraphCreator {
 
     };
 
+    /**
+     * processes the input from user interaction via buttons or windows
+     */
     private processInput() {
         if (this.searchInput.value !== "") {
             if (this.renderer !== undefined) {
@@ -56,23 +62,33 @@ export class SigmaGraphCreator {
     }
 
 
-
-    private getRelevantTrainIds(graph: DirectedGraph, trainId: number, neighborDegree: number) {
+    /**
+     * 
+     * @param graph 
+     * @param trainId 
+     * @param neighborDegree 
+     * @returns the set of trainIds which are direct or indirect neighbors of the input trainId with the given degree
+     */
+    private getRelevantTrainIds(graph: DirectedGraph, trainId: number, neighborDegree: number): Set<number> {
         let result = new Set<number>();
         result.add(trainId);
-        let temp = result;
 
         for (let i = 0; i < neighborDegree; i++) {
-            temp = this.getNeighborTrainIds(graph, temp);
-            result = new Set([...result, ...temp]);
+            result = new Set([...result, ...this.getNeighborTrainIds(graph, result)]);
         }
         return result;
     }
 
-    private getNeighborTrainIds(graph: DirectedGraph, trainIds: Set<number>) {
+    /**
+     * 
+     * @param graph 
+     * @param trainIds 
+     * @returns a set of trainIds, which are a neighbor of a train for every trainId in trainIds
+     */
+    private getNeighborTrainIds(graph: DirectedGraph, trainIds: Set<number>): Set<number> {
         let result = new Set<number>();
-        _.each([...trainIds], trainId => {
-            _.each([... this.nodesForGivenTrainId.get(trainId)], node => {
+        trainIds.forEach(trainId => {
+            this.nodesForGivenTrainId.get(trainId)!.forEach(node => {
                 graph.forEachNeighbor(node, neighbor => {
                     if (graph.getNodeAttribute(node, "t") != graph.getNodeAttribute(neighbor, "t")) {
                         result.add(graph.getNodeAttribute(neighbor, "t"));
@@ -81,54 +97,60 @@ export class SigmaGraphCreator {
             })
         });
 
-        return new Set(_.uniq([...result]));
+        return result;
     }
 
 
-    // puts a whole train into the graph
+    /**
+     * 
+     * @param relevantTrainIds the set of all trains that need to be displayed
+     * @returns the set of all relevant nodes for the given input of trainId and neighborhood degree
+     */
     private getRelevantNodes(relevantTrainIds: Set<number>): Set<string> {
         let allNodes = new Set<string>();
-        _.each([...relevantTrainIds], trainId => {
+        relevantTrainIds.forEach(trainId => {
             const nodesOfCurrentTrainId = this.nodesForGivenTrainId.get(trainId);
             this.maxTrainLength = this.maxTrainLength < nodesOfCurrentTrainId!.length ? nodesOfCurrentTrainId!.length : this.maxTrainLength;
-            _.each([... nodesOfCurrentTrainId], node => allNodes.add(node));
+            nodesOfCurrentTrainId!.forEach(node => allNodes.add(node));
         });
         return allNodes;
     }
 
-    private createSigmaGraph(json, graph) {
-        console.time("import");
-        this.unsafeImport(json, graph);
-        console.timeEnd("import");
-    }
 
+    /**
+     * This method creates the graph that actually is being rendered
+     * it is a subgraph of the whole data filtered by the given parameters
+     * @param graph
+     * @param trainId 
+     * @param neighborDegree 
+     */
     private createPartialGraph(graph, trainId, neighborDegree) {
-        console.time("filter");
-
         let allTrainIds = this.getRelevantTrainIds(graph, trainId, neighborDegree);
         const numberOfTrains = allTrainIds.size;
+        //recreats the original data order
         allTrainIds = [...allTrainIds].sort((a, b) => a - b);
-        
+
         const nodeSet = this.getRelevantNodes(allTrainIds);
-        
         const smallGraph = subgraph(graph, nodeSet);
 
         this.setGraphAttributes(smallGraph, numberOfTrains);
         this.renderer = new Sigma(smallGraph, this.sigmaContainer, rendererSettings);
         this.setEventHandler(smallGraph);
-        console.timeEnd("filter");
     }
-
-
 
     private setGraphAttributes(graph: DirectedGraph, numberOfTrains: number) {
         this.setNodeAttributes(graph, numberOfTrains);
         this.setEdgeAttributes(graph);
     }
 
+    /**
+     * the x and y values are set to create a grid-like representation
+     * @param graph 
+     * @param numberOfTrains 
+     */
     private setNodeAttributes(graph: DirectedGraph, numberOfTrains: number) {
         let lastTrainId = null;
-        let ratio = this.maxTrainLength/numberOfTrains;
+        let ratio = this.maxTrainLength / numberOfTrains;
         let xPosition = 0;
         let yPosition = -1;
 
@@ -224,13 +246,14 @@ export class SigmaGraphCreator {
     /**
      * requests the random generated graph from the server
      */
-    private getInitGraph(graph: DirectedGraph) {
+    private async getInitGraph(graph: DirectedGraph) {
         sendRequest({ url: '/api/ordering_graph/' })
             .then(response => response.json())
-            .then(json =>
-                this.createSigmaGraph(json, graph));
+            .then(json => {
+                this.unsafeImport(json, graph);
+            });
     }
-    
+
 
     /**
      * requests the updated graph after reversing an edge
@@ -241,7 +264,7 @@ export class SigmaGraphCreator {
         sendPostData({ url: '/api/ordering_graph/invert', data: graph, values: edgeInformation })
             .then(response => response.json())
             .then(json =>
-                this.createSigmaGraph(json, graph));
+                this.unsafeImport(json, graph));
     }
 
 
@@ -274,30 +297,21 @@ export class SigmaGraphCreator {
 
         let i, l;
 
-        if (data.n) {            
-
+        if (data.n) {
             for (i = 0, l = data.n.length; i < l; i++) {
-                
-                // Adding the node
-                const r = data.n[i][1]; 
+                const r = data.n[i][1];
                 const t = data.n[i][2];
 
-                graph.addNode(data.n[i][0], {r, t});
-                this.nodesForGivenTrainId.get(t) === undefined ? this.nodesForGivenTrainId.set(t, [data.n[i][0]]) : this.nodesForGivenTrainId.get(t).push(data.n[i][0]);
-                this.nodesForGivenRouteId.get(r) === undefined ? this.nodesForGivenRouteId.set(r, [data.n[i][0]]) : this.nodesForGivenRouteId.get(r).push(data.n[i][0]);
+                graph.addNode(data.n[i][0], { r, t });
+                // map for faster filtering later on
+                this.nodesForGivenTrainId.get(t) === undefined ? this.nodesForGivenTrainId.set(t, [data.n[i][0]]) : this.nodesForGivenTrainId.get(t)!.push(data.n[i][0]);
+                this.nodesForGivenRouteId.get(r) === undefined ? this.nodesForGivenRouteId.set(r, [data.n[i][0]]) : this.nodesForGivenRouteId.get(r)!.push(data.n[i][0]);
             }
         }
 
         if (data.e) {
-            let undirectedByDefault = false;
-            
-
             for (i = 0, l = data.e.length; i < l; i++) {
-                
-                // Adding the edge
-                
                 graph.addDirectedEdgeWithKey(i, data.e[i][0], data.e[i][1]);
-
             }
         }
         return graph;
