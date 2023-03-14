@@ -52,9 +52,7 @@ export class SigmaGraphCreator {
             self.enableNodeHover = $("#node-enable").is(":checked");
         });
         $("#route-input").on("change", function () {
-            console.time("scale");
             self.processRouteID();
-            console.timeEnd("scale");
         });
         $("#Scaling-input").on("change", function () {
             self.destroySigmaGraph();
