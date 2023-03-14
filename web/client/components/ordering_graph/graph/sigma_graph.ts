@@ -52,9 +52,11 @@ export class SigmaGraphCreator {
             self.enableNodeHover = $("#node-enable").is(":checked");
         });
         $("#route-input").on("change", function () {
+            console.time("scale");
             self.processRouteID();
+            console.timeEnd("scale");
         });
-        $("#Scaling-input").on("input", function () {
+        $("#Scaling-input").on("change", function () {
             self.destroySigmaGraph();
             self.subGraphRouteIds = new Set<number>();
             self.inputScaling = parseInt($("#Scaling-input").val());
@@ -184,13 +186,22 @@ export class SigmaGraphCreator {
             this.maxTrainLength = this.maxTrainLength < nodesOfCurrentTrainId!.length ? nodesOfCurrentTrainId!.length : this.maxTrainLength;
 
             nodesOfCurrentTrainId!.forEach((node) => {
-                const route_id = this.graph.getNodeAttribute(node, "r")
-                this.subGraphRouteIds.add(route_id);
-                this.nodesForGivenRouteId.get(route_id) === undefined ? this.nodesForGivenRouteId.set(route_id, [node]) : this.nodesForGivenRouteId.get(route_id)!.push(node);
+                const route_id = this.graph.getNodeAttribute(node, "r");
+                this.intializeRouteInfo(route_id, node);
                 allNodes.add(node);
             });
         });
         return allNodes;
+    }
+
+    /**
+     * This function adds the specified RouteID to the subGraphRouteIds class attribute and also includes the given node in the nodesForGivenRouteId hashmap.
+     * @param route_id 
+     * @param node 
+     */
+    private intializeRouteInfo(route_id, node) {
+        this.subGraphRouteIds.add(route_id);
+        this.nodesForGivenRouteId.get(route_id) === undefined ? this.nodesForGivenRouteId.set(route_id, [node]) : this.nodesForGivenRouteId.get(route_id)!.push(node);
     }
 
     /**
@@ -390,10 +401,10 @@ export class SigmaGraphCreator {
      */
     private highlightRoute(graph: DirectedGraph, routeId: number) {
         this.state.selectedNodes = new Set(this.nodesForGivenRouteId.get(routeId));
-        this.rendererNodeReducer(graph, routeId);
+        this.rendererNodeReducer(graph, routeId); 
         this.rendererEdgeReducer(graph);
-
         this.renderer.refresh();
+
     }
 
     private highlightHoveredNode(graph: DirectedGraph) {
